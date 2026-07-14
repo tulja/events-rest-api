@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Match go.mod major.minor (do not use patch in go.mod; setup-go resolves latest patch)
+          go-version: "1.26.x"
+          cache: true
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test ./... -count=1
+        # mattn/go-sqlite3 needs CGO (enabled by default on ubuntu-latest)

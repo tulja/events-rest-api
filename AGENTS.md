@@ -6,7 +6,7 @@ Project rules and context for the Events REST API (Go + Gin).
 
 A lightweight REST API for creating and managing events with user authentication and registrations.
 
-- **Language**: Go 1.26.3
+- **Language**: Go 1.26+ (`go.mod` uses `go 1.26`; local toolchain may be 1.26.x)
 - **Module**: `events-rest-api`
 - **HTTP Framework**: Gin (`github.com/gin-gonic/gin`)
 - **Database**: SQLite (via `github.com/mattn/go-sqlite3`), file `./events.db`
