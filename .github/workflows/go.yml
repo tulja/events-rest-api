@@ -26,5 +26,7 @@ jobs:
         run: go build -v ./...
 
       - name: Test
+        env:
+          CGO_ENABLED: "0"
         run: go test ./... -count=1
-        # mattn/go-sqlite3 needs CGO (enabled by default on ubuntu-latest)
+        # modernc.org/sqlite is pure Go (no CGO)

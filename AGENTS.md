@@ -9,7 +9,7 @@ A lightweight REST API for creating and managing events with user authentication
 - **Language**: Go 1.26+ (`go.mod` uses `go 1.26`; local toolchain may be 1.26.x)
 - **Module**: `events-rest-api`
 - **HTTP Framework**: Gin (`github.com/gin-gonic/gin`)
-- **Database**: SQLite (via `github.com/mattn/go-sqlite3`), file `./events.db`
+- **Database**: SQLite (via pure-Go `modernc.org/sqlite`, no CGO), file `./events.db`
 - **Auth**: JWT (golang-jwt/jwt/v5) + bcrypt password hashing
 - **Secrets**: HashiCorp Vault (KV v2) — JWT signing key is **required** at startup
 - **Port**: 8080
@@ -51,7 +51,7 @@ Server starts on `http://localhost:8080`.
 ```bash
 make build   # go build -o events-rest-api .
 make run     # go run .  (Vault required for JWT)
-make test    # go test ./... -count=1  (CGO required for sqlite3)
+make test    # go test ./... -count=1  (no CGO required; modernc.org/sqlite)
 make test-v  # verbose tests
 make fmt
 make tidy

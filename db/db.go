@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"log/slog"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 var db *sql.DB
@@ -12,7 +12,7 @@ var db *sql.DB
 func InitDB() {
 	const path = "./events.db"
 	var err error
-	db, err = sql.Open("sqlite3", path)
+	db, err = sql.Open("sqlite", path)
 	if err != nil {
 		slog.Error("failed to open database", "path", path, "err", err)
 		panic(err)
@@ -27,7 +27,7 @@ func InitDB() {
 // InitInMemory opens an in-memory SQLite DB and creates schema.
 // Intended for tests in other packages (e.g. routes) that cannot access the unexported handle.
 func InitInMemory() error {
-	testDB, err := sql.Open("sqlite3", ":memory:")
+	testDB, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		return err
 	}

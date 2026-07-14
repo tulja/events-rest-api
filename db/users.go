@@ -7,7 +7,8 @@ import (
 	"events-rest-api/utils"
 	"strings"
 
-	"github.com/mattn/go-sqlite3"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 var (
@@ -48,13 +49,20 @@ func GetUserByEmail(email string) (models.User, error) {
 	return user, nil
 }
 
+// isUniqueConstraint detects SQLite unique-constraint failures using modernc.org/sqlite
+// (pure Go; works without CGO / on Vercel).
 func isUniqueConstraint(err error) bool {
-	var se sqlite3.Error
-	if errors.As(err, &se) {
-		return se.ExtendedCode == sqlite3.ErrConstraintUnique || se.Code == sqlite3.ErrConstraint
+	if err == nil {
+		return false
 	}
-	// Fallback for wrapped/driver message variants
-	return strings.Contains(err.Error(), "UNIQUE constraint failed")
+	var se *sqlite.Error
+	if errors.As(err, &se) {
+		code := se.Code()
+		// SQLITE_CONSTRAINT = 19; extended unique codes keep low byte as CONSTRAINT.
+		return code == sqlite3.SQLITE_CONSTRAINT || (code&0xff) == sqlite3.SQLITE_CONSTRAINT
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unique constraint failed")
 }
 
 func mapNoRows(err error, notFound error) error {
