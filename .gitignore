@@ -1,0 +1,28 @@
+# Binaries
+events-rest-api
+events-api
+*.exe
+*.test
+*.out
+
+# SQLite databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Go / tooling
+vendor/
+coverage.out
+coverage.html
+
+# Env / secrets
+.env
+.env.*
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~

@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eventful</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0F1629;
+    --surface:   #1A2240;
+    --card:      #202D50;
+    --border:    #2E3F6E;
+    --text:      #F0EDE6;
+    --muted:     #8A95B0;
+    --amber:     #F5A623;
+    --amber-dim: #B87A1A;
+    --danger:    #E05A5A;
+    --success:   #4CAF7D;
+    --radius:    10px;
+    --ticket-w:  14px;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(15,22,41,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 1.4rem;
+    color: var(--amber); letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--text); }
+  .nav-right { display: flex; gap: 0.75rem; align-items: center; }
+  .nav-user {
+    font-size: 0.8rem; color: var(--muted);
+    padding: 0.3rem 0.75rem;
+    background: var(--surface);
+    border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── BUTTONS ── */
+  .btn {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600; font-size: 0.85rem;
+    padding: 0.5rem 1.1rem;
+    border-radius: 6px;
+    border: none; cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+  }
+  .btn-primary { background: var(--amber); color: #0F1629; }
+  .btn-primary:hover { background: #ffc04d; transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+  .btn-sm { padding: 0.3rem 0.8rem; font-size: 0.78rem; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+  /* ── MAIN LAYOUT ── */
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem;
+  }
+
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 2rem;
+  }
+  .page-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.75rem; font-weight: 800;
+  }
+  .page-title span { color: var(--amber); }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex; gap: 0.25rem;
+    background: var(--surface);
+    border-radius: 8px; padding: 4px;
+    border: 1px solid var(--border);
+    margin-bottom: 2rem;
+    width: fit-content;
+  }
+  .tab {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.82rem; font-weight: 600;
+    padding: 0.4rem 1rem;
+    border-radius: 5px;
+    border: none; cursor: pointer;
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+  .tab.active { background: var(--amber); color: #0F1629; }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* ── TICKET CARDS ── */
+  .events-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .ticket {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    overflow: hidden;
+    transition: transform 0.15s, box-shadow 0.15s;
+    position: relative;
+  }
+  .ticket:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.35); }
+
+  /* The ticket stub — left colored tab */
+  .ticket-stub {
+    width: var(--ticket-w);
+    background: var(--amber);
+    flex-shrink: 0;
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    padding: 6px 0;
+  }
+  .ticket-stub::before,
+  .ticket-stub::after {
+    content: '';
+    width: 12px; height: 12px;
+    background: var(--bg);
+    border-radius: 50%;
+    position: absolute;
+    left: 50%; transform: translateX(-50%);
+    z-index: 1;
+  }
+  .ticket-stub::before { top: -6px; }
+  .ticket-stub::after  { bottom: -6px; }
+  /* Dashed perforation */
+  .ticket-stub-inner {
+    width: 1px;
+    flex: 1;
+    border-left: 2px dashed rgba(15,22,41,0.3);
+    margin: 10px 0;
+  }
+
+  .ticket-body {
+    flex: 1;
+    padding: 1.1rem 1.25rem;
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+
+  .ticket-meta {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-size: 0.72rem; color: var(--muted);
+    font-weight: 500; letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  .ticket-meta .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--border); }
+
+  .ticket-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.05rem; font-weight: 700;
+    line-height: 1.25;
+    color: var(--text);
+  }
+
+  .ticket-desc {
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .ticket-footer {
+    margin-top: 0.75rem;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .ticket-loc {
+    font-size: 0.78rem; color: var(--muted);
+    display: flex; align-items: center; gap: 0.3rem;
+  }
+
+  .ticket-actions { display: flex; gap: 0.5rem; }
+
+  .owner-badge {
+    font-size: 0.68rem; font-weight: 600;
+    background: rgba(245,166,35,0.15);
+    color: var(--amber);
+    border: 1px solid rgba(245,166,35,0.3);
+    border-radius: 4px;
+    padding: 0.15rem 0.5rem;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  .reg-badge {
+    font-size: 0.68rem; font-weight: 600;
+    background: rgba(76,175,125,0.12);
+    color: var(--success);
+    border: 1px solid rgba(76,175,125,0.3);
+    border-radius: 4px;
+    padding: 0.15rem 0.5rem;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty {
+    text-align: center; padding: 4rem 2rem;
+    color: var(--muted);
+  }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+  .empty h3 { font-family: 'Syne', sans-serif; font-size: 1.1rem; color: var(--text); margin-bottom: 0.35rem; }
+  .empty p { font-size: 0.85rem; }
+
+  /* ── MODAL ── */
+  .overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.65);
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .overlay.open { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 2rem;
+    width: 100%; max-width: 420px;
+    transform: translateY(16px);
+    transition: transform 0.2s;
+  }
+  .overlay.open .modal { transform: translateY(0); }
+
+  .modal-header {
+    margin-bottom: 1.5rem;
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .modal-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.2rem; font-weight: 700;
+  }
+  .modal-close {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 1.2rem; line-height: 1;
+    padding: 0.2rem;
+    transition: color 0.15s;
+  }
+  .modal-close:hover { color: var(--text); }
+
+  /* ── FORM ── */
+  .form-group { margin-bottom: 1rem; }
+  label {
+    display: block;
+    font-size: 0.78rem; font-weight: 500;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+    letter-spacing: 0.3px;
+  }
+  input, textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 0.6rem 0.85rem;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, textarea:focus { border-color: var(--amber); }
+  textarea { resize: vertical; min-height: 80px; }
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.6);
+    cursor: pointer;
+  }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+  .form-actions {
+    display: flex; gap: 0.75rem; justify-content: flex-end;
+    margin-top: 1.5rem;
+  }
+
+  /* ── AUTH TABS ── */
+  .auth-tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+  .auth-tab {
+    font-family: 'Syne', sans-serif; font-size: 0.88rem; font-weight: 700;
+    padding: 0.6rem 1.2rem; border: none; background: none; cursor: pointer;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    margin-bottom: -1px; transition: all 0.15s;
+  }
+  .auth-tab.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 200;
+    font-size: 0.85rem; font-weight: 500;
+    padding: 0.7rem 1.2rem;
+    border-radius: 8px;
+    opacity: 0; transform: translateY(8px);
+    transition: all 0.25s;
+    pointer-events: none;
+    max-width: 320px;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.success { background: var(--success); color: #fff; }
+  #toast.error   { background: var(--danger);  color: #fff; }
+  #toast.info    { background: var(--surface);  color: var(--text); border: 1px solid var(--border); }
+
+  /* ── SPINNER ── */
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.25);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem;
+  }
+  .skeleton {
+    height: 160px; border-radius: var(--radius);
+    background: linear-gradient(90deg, var(--surface) 25%, var(--card) 50%, var(--surface) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ── DETAIL PANEL ── */
+  .detail-panel {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: min(460px, 100vw);
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    z-index: 80;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .detail-panel.open { transform: translateX(0); }
+  .detail-panel-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    position: sticky; top: 0; background: var(--surface); z-index: 1;
+  }
+  .detail-panel-body { padding: 1.5rem; flex: 1; }
+  .detail-label {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--muted); font-weight: 600; margin-bottom: 0.3rem;
+  }
+  .detail-value { font-size: 0.9rem; margin-bottom: 1.25rem; line-height: 1.5; }
+  .detail-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.4rem; font-weight: 800; margin-bottom: 1.5rem; line-height: 1.2;
+  }
+  .detail-actions {
+    display: flex; flex-wrap: wrap; gap: 0.6rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--border);
+    position: sticky; bottom: 0; background: var(--surface);
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">event<span>ful</span></div>
+  <div class="nav-right" id="navRight">
+    <button class="btn btn-ghost" onclick="openAuth('login')">Sign in</button>
+    <button class="btn btn-primary" onclick="openAuth('signup')">Sign up</button>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main>
+  <div class="page-header">
+    <h1 class="page-title">Upcoming <span>Events</span></h1>
+    <button class="btn btn-primary" id="createBtn" style="display:none" onclick="openCreateModal()">
+      + New Event
+    </button>
+  </div>
+
+  <!-- TABS (only when logged in) -->
+  <div class="tabs" id="tabsEl" style="display:none">
+    <button class="tab active" onclick="switchTab('all', this)">All Events</button>
+    <button class="tab" onclick="switchTab('mine', this)">My Events</button>
+    <button class="tab" onclick="switchTab('registered', this)">Registered</button>
+  </div>
+
+  <div id="eventsContainer"></div>
+</main>
+
+<!-- DETAIL PANEL -->
+<div class="detail-panel" id="detailPanel">
+  <div class="detail-panel-header">
+    <span class="logo" style="font-size:1rem">Event Details</span>
+    <button class="modal-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div class="detail-panel-body" id="detailBody"></div>
+  <div class="detail-actions" id="detailActions"></div>
+</div>
+
+<!-- AUTH MODAL -->
+<div class="overlay" id="authOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Welcome to Eventful</span>
+      <button class="modal-close" onclick="closeAuth()">✕</button>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="loginTab" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" id="signupTab" onclick="switchAuthTab('signup')">Sign Up</button>
+    </div>
+    <div id="authForm"></div>
+  </div>
+</div>
+
+<!-- CREATE / EDIT MODAL -->
+<div class="overlay" id="eventOverlay">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <span class="modal-title" id="eventModalTitle">New Event</span>
+      <button class="modal-close" onclick="closeEventModal()">✕</button>
+    </div>
+    <div id="eventForm"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+const API = 'http://localhost:8080';
+let token = null;
+let currentUser = null; // { user_id, email }
+let allEvents = [];
+let myRegistrations = [];
+let currentTab = 'all';
+let editingEvent = null;
+
+/* ─── API HELPERS ─── */
+async function api(method, path, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = token;
+  const res = await fetch(API + path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+/* ─── TOAST ─── */
+let toastTimer;
+function toast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3200);
+}
+
+/* ─── AUTH ─── */
+function openAuth(tab = 'login') {
+  document.getElementById('authOverlay').classList.add('open');
+  switchAuthTab(tab);
+}
+function closeAuth() {
+  document.getElementById('authOverlay').classList.remove('open');
+}
+function switchAuthTab(tab) {
+  document.getElementById('loginTab').classList.toggle('active', tab === 'login');
+  document.getElementById('signupTab').classList.toggle('active', tab === 'signup');
+  renderAuthForm(tab);
+}
+function renderAuthForm(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('authForm').innerHTML = `
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="authPassword" placeholder="••••••••" autocomplete="${isLogin ? 'current-password' : 'new-password'}">
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" style="width:100%;justify-content:center" id="authSubmitBtn" onclick="submitAuth('${tab}')">
+        ${isLogin ? 'Sign In' : 'Create Account'}
+      </button>
+    </div>
+  `;
+  setTimeout(() => document.getElementById('authEmail')?.focus(), 50);
+}
+async function submitAuth(tab) {
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  if (!email || !password) { toast('Fill in all fields', 'error'); return; }
+  const btn = document.getElementById('authSubmitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    if (tab === 'signup') {
+      await api('POST', '/signup', { email, password });
+      toast('Account created — signing you in…', 'success');
+      // auto-login
+      const data = await api('POST', '/login', { email, password });
+      setSession(data, email);
+    } else {
+      const data = await api('POST', '/login', { email, password });
+      setSession(data, email);
+    }
+    closeAuth();
+  } catch (e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = tab === 'login' ? 'Sign In' : 'Create Account';
+  }
+}
+function setSession(data, email) {
+  token = data.token;
+  // Decode JWT payload to get user_id
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    currentUser = { user_id: payload.user_id, email: payload.email || email };
+  } catch { currentUser = { user_id: null, email }; }
+  updateNav();
+  toast(`Welcome, ${currentUser.email}`, 'success');
+  loadAll();
+}
+function logout() {
+  token = null; currentUser = null;
+  myRegistrations = [];
+  updateNav();
+  document.getElementById('tabsEl').style.display = 'none';
+  document.getElementById('createBtn').style.display = 'none';
+  currentTab = 'all';
+  closeDetail();
+  loadAll();
+}
+function updateNav() {
+  const el = document.getElementById('navRight');
+  if (currentUser) {
+    el.innerHTML = `
+      <span class="nav-user">${currentUser.email}</span>
+      <button class="btn btn-ghost" onclick="logout()">Sign out</button>
+    `;
+    document.getElementById('tabsEl').style.display = 'flex';
+    document.getElementById('createBtn').style.display = 'inline-flex';
+  } else {
+    el.innerHTML = `
+      <button class="btn btn-ghost" onclick="openAuth('login')">Sign in</button>
+      <button class="btn btn-primary" onclick="openAuth('signup')">Sign up</button>
+    `;
+  }
+}
+
+/* ─── EVENTS LOADING ─── */
+async function loadAll() {
+  renderLoading();
+  try {
+    allEvents = await api('GET', '/events');
+    if (currentUser) {
+      try { myRegistrations = await api('GET', '/events/registrations'); }
+      catch { myRegistrations = []; }
+    }
+    renderEvents();
+  } catch (e) {
+    document.getElementById('eventsContainer').innerHTML =
+      `<div class="empty"><div class="empty-icon">⚠️</div><h3>Could not load events</h3><p>${e.message}</p></div>`;
+  }
+}
+function renderLoading() {
+  document.getElementById('eventsContainer').innerHTML =
+    `<div class="loading-grid">${'<div class="skeleton"></div>'.repeat(6)}</div>`;
+}
+
+function switchTab(tab, el) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderEvents();
+}
+
+function renderEvents() {
+  let events = allEvents;
+  if (currentTab === 'mine' && currentUser) {
+    events = allEvents.filter(e => e.user_id === currentUser.user_id);
+  } else if (currentTab === 'registered') {
+    const regIds = new Set(myRegistrations.map(e => e.id));
+    events = allEvents.filter(e => regIds.has(e.id));
+  }
+
+  const regIds = new Set(myRegistrations.map(e => e.id));
+
+  if (!events.length) {
+    const msgs = {
+      all: { icon: '🗓️', title: 'No events yet', sub: currentUser ? 'Be the first to create one.' : 'Sign up to create events.' },
+      mine: { icon: '✏️', title: 'You haven\'t created any events', sub: 'Use "+ New Event" to get started.' },
+      registered: { icon: '🎟️', title: 'No registrations yet', sub: 'Browse events and register for ones you\'re interested in.' }
+    };
+    const m = msgs[currentTab];
+    document.getElementById('eventsContainer').innerHTML =
+      `<div class="empty"><div class="empty-icon">${m.icon}</div><h3>${m.title}</h3><p>${m.sub}</p></div>`;
+    return;
+  }
+
+  document.getElementById('eventsContainer').innerHTML =
+    `<div class="events-grid">${events.map(e => ticketCard(e, regIds)).join('')}</div>`;
+}
+
+function ticketCard(ev, regIds) {
+  const isOwner = currentUser && ev.user_id === currentUser.user_id;
+  const isReg = regIds.has(ev.id);
+  const dt = new Date(ev.date_time);
+  const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const timeStr = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+  return `
+    <div class="ticket" onclick="openDetail(${ev.id})">
+      <div class="ticket-stub"><div class="ticket-stub-inner"></div></div>
+      <div class="ticket-body">
+        <div class="ticket-meta">
+          <span>${dateStr}</span><span class="dot"></span><span>${timeStr}</span>
+          ${isOwner ? '<span class="dot"></span><span class="owner-badge">Host</span>' : ''}
+          ${isReg && !isOwner ? '<span class="dot"></span><span class="reg-badge">Registered</span>' : ''}
+        </div>
+        <div class="ticket-name">${esc(ev.name)}</div>
+        <div class="ticket-desc">${esc(ev.description)}</div>
+        <div class="ticket-footer">
+          <span class="ticket-loc">📍 ${esc(ev.location)}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ─── DETAIL PANEL ─── */
+async function openDetail(id) {
+  const ev = allEvents.find(e => e.id === id);
+  if (!ev) return;
+  const regIds = new Set(myRegistrations.map(e => e.id));
+  const isOwner = currentUser && ev.user_id === currentUser.user_id;
+  const isReg = regIds.has(ev.id);
+  const dt = new Date(ev.date_time);
+
+  document.getElementById('detailBody').innerHTML = `
+    <div class="detail-name">${esc(ev.name)}</div>
+    <div class="detail-label">Description</div>
+    <div class="detail-value">${esc(ev.description)}</div>
+    <div class="detail-label">Location</div>
+    <div class="detail-value">📍 ${esc(ev.location)}</div>
+    <div class="detail-label">Date & Time</div>
+    <div class="detail-value">
+      ${dt.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}<br>
+      <span style="color:var(--muted)">${dt.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' })}</span>
+    </div>
+    <div class="detail-label">Event ID</div>
+    <div class="detail-value" style="color:var(--muted);font-size:0.8rem">#${ev.id}</div>
+  `;
+
+  let actions = '';
+  if (currentUser) {
+    if (isOwner) {
+      actions = `
+        <button class="btn btn-ghost" onclick="openEditModal(${ev.id})">Edit</button>
+        <button class="btn btn-danger" onclick="deleteEvent(${ev.id})">Delete Event</button>
+      `;
+    } else if (isReg) {
+      actions = `<button class="btn btn-ghost" onclick="cancelRegistration(${ev.id})">Cancel Registration</button>`;
+    } else {
+      actions = `<button class="btn btn-primary" onclick="registerForEvent(${ev.id})">Register for Event</button>`;
+    }
+  } else {
+    actions = `<button class="btn btn-ghost" onclick="openAuth('login')">Sign in to register</button>`;
+  }
+  document.getElementById('detailActions').innerHTML = actions;
+  document.getElementById('detailPanel').classList.add('open');
+}
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('open');
+}
+
+/* ─── EVENT ACTIONS ─── */
+async function registerForEvent(id) {
+  try {
+    await api('POST', `/events/${id}/register`);
+    toast('Registered successfully!', 'success');
+    await loadAll();
+    openDetail(id);
+  } catch (e) { toast(e.message, 'error'); }
+}
+async function cancelRegistration(id) {
+  try {
+    await api('DELETE', `/events/${id}/register`);
+    toast('Registration cancelled', 'info');
+    await loadAll();
+    closeDetail();
+  } catch (e) { toast(e.message, 'error'); }
+}
+async function deleteEvent(id) {
+  if (!confirm('Delete this event? This cannot be undone.')) return;
+  try {
+    await api('DELETE', `/events/${id}`);
+    toast('Event deleted', 'info');
+    closeDetail();
+    await loadAll();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ─── CREATE / EDIT MODAL ─── */
+function openCreateModal() {
+  editingEvent = null;
+  document.getElementById('eventModalTitle').textContent = 'New Event';
+  renderEventForm(null);
+  document.getElementById('eventOverlay').classList.add('open');
+}
+function openEditModal(id) {
+  editingEvent = allEvents.find(e => e.id === id);
+  document.getElementById('eventModalTitle').textContent = 'Edit Event';
+  renderEventForm(editingEvent);
+  document.getElementById('eventOverlay').classList.add('open');
+}
+function closeEventModal() {
+  document.getElementById('eventOverlay').classList.remove('open');
+}
+
+function toLocalDatetimeValue(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function renderEventForm(ev) {
+  document.getElementById('eventForm').innerHTML = `
+    <div class="form-group">
+      <label>Event Name</label>
+      <input type="text" id="evName" placeholder="e.g. Go Conference 2026" value="${ev ? esc(ev.name) : ''}">
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="evDesc" placeholder="What's this event about?">${ev ? esc(ev.description) : ''}</textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Location</label>
+        <input type="text" id="evLocation" placeholder="City or venue" value="${ev ? esc(ev.location) : ''}">
+      </div>
+      <div class="form-group">
+        <label>Date & Time</label>
+        <input type="datetime-local" id="evDatetime" value="${ev ? toLocalDatetimeValue(ev.date_time) : ''}">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeEventModal()">Cancel</button>
+      <button class="btn btn-primary" id="evSubmitBtn" onclick="submitEventForm()">
+        ${ev ? 'Save Changes' : 'Create Event'}
+      </button>
+    </div>
+  `;
+  setTimeout(() => document.getElementById('evName')?.focus(), 50);
+}
+
+async function submitEventForm() {
+  const name = document.getElementById('evName').value.trim();
+  const description = document.getElementById('evDesc').value.trim();
+  const location = document.getElementById('evLocation').value.trim();
+  const datetimeRaw = document.getElementById('evDatetime').value;
+  if (!name || !description || !location || !datetimeRaw) {
+    toast('All fields are required', 'error'); return;
+  }
+  const date_time = new Date(datetimeRaw).toISOString();
+  const btn = document.getElementById('evSubmitBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    if (editingEvent) {
+      await api('PUT', `/events/${editingEvent.id}`, { name, description, location, date_time });
+      toast('Event updated', 'success');
+    } else {
+      await api('POST', '/events', { name, description, location, date_time });
+      toast('Event created!', 'success');
+    }
+    closeEventModal();
+    await loadAll();
+  } catch (e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = editingEvent ? 'Save Changes' : 'Create Event';
+  }
+}
+
+/* ─── KEYBOARD ─── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeAuth(); closeEventModal(); closeDetail(); }
+  if (e.key === 'Enter') {
+    if (document.getElementById('authOverlay').classList.contains('open')) {
+      const tab = document.getElementById('loginTab').classList.contains('active') ? 'login' : 'signup';
+      submitAuth(tab);
+    }
+  }
+});
+document.getElementById('authOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeAuth(); });
+document.getElementById('eventOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeEventModal(); });
+
+/* ─── UTIL ─── */
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ─── INIT ─── */
+loadAll();
+</script>
+</body>
+</html>
