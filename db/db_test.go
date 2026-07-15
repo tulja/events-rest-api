@@ -20,12 +20,27 @@ func TestCreateTables_Idempotent(t *testing.T) {
 	}
 }
 
+func clearVercelEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"VERCEL",
+		"VERCEL_ENV",
+		"VERCEL_URL",
+		"VERCEL_REGION",
+		"VERCEL_DEPLOYMENT_ID",
+		"VERCEL_PROJECT_ID",
+		"VERCEL_GIT_COMMIT_SHA",
+	} {
+		t.Setenv(key, "")
+	}
+}
+
 func TestResolveDBPath_Defaults(t *testing.T) {
 	t.Setenv("DATABASE_PATH", "")
 	t.Setenv("SQLITE_PATH", "")
-	t.Setenv("VERCEL", "")
-	t.Setenv("VERCEL_ENV", "")
+	clearVercelEnv(t)
 
+	// Local cwd is writable in tests → default path.
 	if got := resolveDBPath(); got != "./events.db" {
 		t.Fatalf("resolveDBPath() = %q, want ./events.db", got)
 	}
@@ -50,18 +65,49 @@ func TestResolveDBPath_EnvOverrides(t *testing.T) {
 func TestResolveDBPath_VercelUsesTemp(t *testing.T) {
 	t.Setenv("DATABASE_PATH", "")
 	t.Setenv("SQLITE_PATH", "")
-	t.Setenv("VERCEL", "1")
-	t.Setenv("VERCEL_ENV", "")
+	clearVercelEnv(t)
 
 	want := filepath.Join(os.TempDir(), "events.db")
-	if got := resolveDBPath(); got != want {
-		t.Fatalf("VERCEL path: got %q, want %q", got, want)
+
+	cases := []struct {
+		key, val string
+	}{
+		{"VERCEL", "1"},
+		{"VERCEL_ENV", "production"},
+		{"VERCEL_URL", "example.vercel.app"},
+		{"VERCEL_REGION", "iad1"},
+		{"VERCEL_DEPLOYMENT_ID", "dpl_abc"},
+		{"VERCEL_PROJECT_ID", "prj_abc"},
+		{"VERCEL_GIT_COMMIT_SHA", "deadbeef"},
+	}
+	for _, tc := range cases {
+		clearVercelEnv(t)
+		t.Setenv(tc.key, tc.val)
+		if got := resolveDBPath(); got != want {
+			t.Fatalf("%s=%q path: got %q, want %q", tc.key, tc.val, got, want)
+		}
+	}
+}
+
+func TestIsVercel_EnvSignals(t *testing.T) {
+	clearVercelEnv(t)
+	if isVercel() {
+		// May still be true if cwd is under /vercel/ (unlikely in local tests).
+		t.Log("isVercel true with cleared env; cwd may look like Vercel")
 	}
 
-	t.Setenv("VERCEL", "")
-	t.Setenv("VERCEL_ENV", "production")
-	if got := resolveDBPath(); got != want {
-		t.Fatalf("VERCEL_ENV path: got %q, want %q", got, want)
+	t.Setenv("VERCEL_URL", "my-app.vercel.app")
+	if !isVercel() {
+		t.Fatal("expected isVercel true when VERCEL_URL is set")
+	}
+}
+
+func TestDirIsWritable(t *testing.T) {
+	if !dirIsWritable(t.TempDir()) {
+		t.Fatal("expected temp dir to be writable")
+	}
+	if dirIsWritable(filepath.Join(t.TempDir(), "does-not-exist")) {
+		t.Fatal("expected missing dir to be not writable")
 	}
 }
 

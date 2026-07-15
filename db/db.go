@@ -44,7 +44,7 @@ func InitDB() {
 
 // resolveDBPath picks a writable SQLite file path.
 // - DATABASE_PATH / SQLITE_PATH if set
-// - $TMPDIR/events.db (typically /tmp/events.db) on Vercel — deployment FS is read-only except /tmp
+// - $TMPDIR/events.db on Vercel / other read-only app filesystems (only /tmp is writable)
 // - ./events.db otherwise (local dev)
 //
 // Note: On Vercel, /tmp is ephemeral per instance. Data is not durable across cold starts
@@ -56,17 +56,64 @@ func resolveDBPath() string {
 	if p := os.Getenv("SQLITE_PATH"); p != "" {
 		return p
 	}
-	// Vercel sets VERCEL=1; also treat VERCEL_ENV as a signal.
-	if isVercel() {
+	// Prefer temp when the platform or cwd cannot host a writable SQLite file.
+	// Long-running Vercel servers do not always set VERCEL=1 the same way as serverless.
+	if reason, ok := mustUseTempDB(); ok {
 		path := filepath.Join(os.TempDir(), "events.db")
-		slog.Info("using temp sqlite path for Vercel", "path", path)
+		slog.Info("using temp sqlite path", "path", path, "reason", reason)
 		return path
 	}
 	return "./events.db"
 }
 
+// mustUseTempDB reports whether SQLite should live under os.TempDir().
+// reason is a short diagnostic string when ok is true.
+func mustUseTempDB() (reason string, ok bool) {
+	if isVercel() {
+		return "vercel", true
+	}
+	// Defense in depth: deployment FS is often read-only even when platform env is missing.
+	if !dirIsWritable(".") {
+		return "cwd-not-writable", true
+	}
+	return "", false
+}
+
 func isVercel() bool {
-	return os.Getenv("VERCEL") != "" || os.Getenv("VERCEL_ENV") != ""
+	// System env vars Vercel may inject (serverless, builds, and long-running servers).
+	// Do not rely on a single key — product surfaces differ.
+	for _, key := range []string{
+		"VERCEL",
+		"VERCEL_ENV",
+		"VERCEL_URL",
+		"VERCEL_REGION",
+		"VERCEL_DEPLOYMENT_ID",
+		"VERCEL_PROJECT_ID",
+		"VERCEL_GIT_COMMIT_SHA",
+	} {
+		if os.Getenv(key) != "" {
+			return true
+		}
+	}
+	// Build/run paths on Vercel look like /vercel/path0/...
+	if cwd, err := os.Getwd(); err == nil {
+		if strings.HasPrefix(cwd, "/vercel/") || strings.Contains(cwd, "/vercel/path") {
+			return true
+		}
+	}
+	return false
+}
+
+// dirIsWritable returns true if a new file can be created in dir.
+func dirIsWritable(dir string) bool {
+	f, err := os.CreateTemp(dir, ".sqlite-write-test-*")
+	if err != nil {
+		return false
+	}
+	name := f.Name()
+	_ = f.Close()
+	_ = os.Remove(name)
+	return true
 }
 
 // ensureDBDir creates the parent directory of path when needed (no-op for :memory: / bare files).
