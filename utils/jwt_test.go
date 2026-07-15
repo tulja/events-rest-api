@@ -91,3 +91,66 @@ func TestGenerateToken_IncludesClaims(t *testing.T) {
 		t.Fatalf("expected future exp claim, got %v", claims["exp"])
 	}
 }
+
+func TestLoadJWTSigningKey_FromEnv(t *testing.T) {
+	ResetJWTSigningKeyForTest()
+	t.Cleanup(ResetJWTSigningKeyForTest)
+
+	// Ensure Vault is not required when env is set.
+	t.Setenv("VAULT_ADDR", "")
+	t.Setenv("VAULT_TOKEN", "")
+	t.Setenv("JWT_SECRET", "")
+	t.Setenv("JWT_SIGNING_KEY", "env-signing-key-value")
+
+	if err := EnsureJWTSigningKey(); err != nil {
+		t.Fatalf("EnsureJWTSigningKey from env: %v", err)
+	}
+
+	user := models.User{ID: 9, Email: "env@example.com"}
+	token, err := GenerateToken(user)
+	if err != nil {
+		t.Fatalf("GenerateToken: %v", err)
+	}
+	userID, err := VerifyToken(token)
+	if err != nil {
+		t.Fatalf("VerifyToken: %v", err)
+	}
+	if userID != 9 {
+		t.Fatalf("userId: got %d want 9", userID)
+	}
+}
+
+func TestLoadJWTSigningKey_JWTSecretFallback(t *testing.T) {
+	ResetJWTSigningKeyForTest()
+	t.Cleanup(ResetJWTSigningKeyForTest)
+
+	t.Setenv("JWT_SIGNING_KEY", "")
+	t.Setenv("JWT_SECRET", "legacy-secret-name")
+
+	if err := EnsureJWTSigningKey(); err != nil {
+		t.Fatalf("EnsureJWTSigningKey from JWT_SECRET: %v", err)
+	}
+
+	token, err := GenerateToken(models.User{ID: 1, Email: "a@b.c"})
+	if err != nil {
+		t.Fatalf("GenerateToken: %v", err)
+	}
+	if _, err := VerifyToken(token); err != nil {
+		t.Fatalf("VerifyToken: %v", err)
+	}
+}
+
+func TestEnsureJWTSigningKey_MissingConfig(t *testing.T) {
+	ResetJWTSigningKeyForTest()
+	t.Cleanup(ResetJWTSigningKeyForTest)
+
+	t.Setenv("JWT_SIGNING_KEY", "")
+	t.Setenv("JWT_SECRET", "")
+	t.Setenv("VAULT_ADDR", "http://127.0.0.1:1") // nothing listening
+	t.Setenv("VAULT_TOKEN", "not-used-if-unreachable")
+
+	err := EnsureJWTSigningKey()
+	if err == nil {
+		t.Fatal("expected error when env and Vault are unavailable")
+	}
+}

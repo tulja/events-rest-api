@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 	"sync"
 
 	"events-rest-api/models"
@@ -18,7 +20,7 @@ var (
 	jwtSigningKey []byte
 )
 
-// SetJWTSigningKeyForTest injects a signing key for unit tests (bypasses Vault).
+// SetJWTSigningKeyForTest injects a signing key for unit tests (bypasses Vault/env).
 func SetJWTSigningKeyForTest(key []byte) {
 	jwtMu.Lock()
 	defer jwtMu.Unlock()
@@ -32,14 +34,18 @@ func ResetJWTSigningKeyForTest() {
 	jwtSigningKey = nil
 }
 
-// EnsureJWTSigningKey loads the signing key from Vault if not already cached.
-// Call at process startup so missing Vault/config fails fast.
+// EnsureJWTSigningKey loads the signing key if not already cached.
+// Call at process startup so missing config fails fast.
+//
+// Resolution order:
+//  1. JWT_SIGNING_KEY env (also accepts JWT_SECRET) — preferred on Vercel/PaaS
+//  2. HashiCorp Vault KV v2 at secret/events-api/jwt key "signing-key" — local/dev
 func EnsureJWTSigningKey() error {
 	_, err := loadJWTSigningKey()
 	return err
 }
 
-// loadJWTSigningKey returns the cached key, or loads it from Vault on success only.
+// loadJWTSigningKey returns the cached key, or loads it from env/Vault on success only.
 // Failed loads are not cached so a later retry can succeed after Vault recovers.
 func loadJWTSigningKey() ([]byte, error) {
 	jwtMu.Lock()
@@ -49,16 +55,22 @@ func loadJWTSigningKey() ([]byte, error) {
 		return jwtSigningKey, nil
 	}
 
+	if key, source, ok := signingKeyFromEnv(); ok {
+		jwtSigningKey = key
+		slog.Info("JWT signing key loaded from environment", "source", source)
+		return jwtSigningKey, nil
+	}
+
 	client, err := secrets.NewClient(nil)
 	if err != nil {
-		err = fmt.Errorf("failed to create vault client: %w", err)
+		err = fmt.Errorf("JWT signing key not set (JWT_SIGNING_KEY) and Vault client failed: %w", err)
 		slog.Error("failed to load JWT signing key", "err", err)
 		return nil, err
 	}
 
 	keyStr, err := client.GetSecretValue(context.Background(), "events-api/jwt", "signing-key")
 	if err != nil {
-		err = fmt.Errorf("failed to read secret events-api/jwt/signing-key from Vault: %w", err)
+		err = fmt.Errorf("JWT signing key not set (JWT_SIGNING_KEY) and Vault read failed: %w", err)
 		slog.Error("failed to load JWT signing key", "err", err)
 		return nil, err
 	}
@@ -66,6 +78,17 @@ func loadJWTSigningKey() ([]byte, error) {
 	jwtSigningKey = []byte(keyStr)
 	slog.Info("JWT signing key loaded from Vault", "path", "events-api/jwt", "key", "signing-key")
 	return jwtSigningKey, nil
+}
+
+// signingKeyFromEnv returns the key from JWT_SIGNING_KEY or JWT_SECRET when non-empty.
+func signingKeyFromEnv() (key []byte, source string, ok bool) {
+	if v := strings.TrimSpace(os.Getenv("JWT_SIGNING_KEY")); v != "" {
+		return []byte(v), "JWT_SIGNING_KEY", true
+	}
+	if v := strings.TrimSpace(os.Getenv("JWT_SECRET")); v != "" {
+		return []byte(v), "JWT_SECRET", true
+	}
+	return nil, "", false
 }
 
 func GenerateToken(user models.User) (string, error) {

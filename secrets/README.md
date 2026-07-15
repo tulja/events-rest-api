@@ -91,9 +91,37 @@ func LoadSecrets() {
 }
 ```
 
+## Vercel / PaaS (no Vault process)
+
+You do **not** need Vault on Vercel. The app loads the JWT key in this order:
+
+1. `JWT_SIGNING_KEY` (or `JWT_SECRET`) environment variable  
+2. Vault KV (local/dev only)
+
+### Vercel setup
+
+1. Generate a long random secret (do not reuse the dev key in production if you care about isolation):
+   ```bash
+   openssl rand -base64 32
+   ```
+2. In the Vercel project: **Settings → Environment Variables**
+   - Name: `JWT_SIGNING_KEY`
+   - Value: the generated secret
+   - Environments: Production / Preview / Development as needed
+   - Mark as **Sensitive** if available
+3. Redeploy so the new env is injected.
+
+Optional local equivalent (skips Vault):
+
+```bash
+export JWT_SIGNING_KEY="$(openssl rand -base64 32)"
+go run .
+```
+
 ## Notes
 
 - This example uses **token authentication** (ideal for local/dev).
-- For production, prefer **AppRole**, **Kubernetes**, or **JWT/OIDC** auth methods.
+- For production, prefer **AppRole**, **Kubernetes**, or **JWT/OIDC** auth methods if you keep Vault.
 - Always use `KV v2` (the path is `secret/data/...` under the hood, handled by the `KVv2()` helper).
 - Do **not** commit tokens or secrets to source control.
+- On serverless platforms, prefer env-injected secrets over a local Vault sidecar.

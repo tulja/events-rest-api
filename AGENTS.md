@@ -9,9 +9,9 @@ A lightweight REST API for creating and managing events with user authentication
 - **Language**: Go 1.26+ (`go.mod` uses `go 1.26`; local toolchain may be 1.26.x)
 - **Module**: `events-rest-api`
 - **HTTP Framework**: Gin (`github.com/gin-gonic/gin`)
-- **Database**: SQLite (via pure-Go `modernc.org/sqlite`, no CGO), file `./events.db`
+- **Database**: SQLite (via pure-Go `modernc.org/sqlite`, no CGO). Path: `DATABASE_PATH` / `SQLITE_PATH`, else `/tmp/events.db` on Vercel, else `./events.db`
 - **Auth**: JWT (golang-jwt/jwt/v5) + bcrypt password hashing
-- **Secrets**: HashiCorp Vault (KV v2) — JWT signing key is **required** at startup
+- **Secrets**: JWT signing key required at startup — `JWT_SIGNING_KEY` (or `JWT_SECRET`) env preferred for Vercel/PaaS; else HashiCorp Vault KV v2 (`secret/events-api/jwt` → `signing-key`)
 - **Port**: 8080
 
 Core domain:
@@ -93,7 +93,7 @@ secrets/
 - **Authentication**: `Authorization: Bearer <jwt>` or raw JWT both accepted (`Bearer ` prefix stripped case-insensitively).
 - **Authorization**: `updateEvent` and `deleteEvent` fetch the event and compare `eventFromDb.UserID != userIdFromToken`.
 - **Ownership**: Every created event stores the creator's `userId` from the JWT.
-- **JWT**: Signing key loaded from Vault at startup via `utils.EnsureJWTSigningKey()` (fail-fast). Successful loads are cached; failures are not sticky so retries can succeed.
+- **JWT**: Signing key loaded at startup via `utils.EnsureJWTSigningKey()` (fail-fast): env `JWT_SIGNING_KEY` / `JWT_SECRET` first, then Vault. Successful loads are cached; failures are not sticky so retries can succeed.
 - **Database**: Raw SQL only. Positional `?` parameters. `PRAGMA foreign_keys = ON`. Rows closed with `defer`.
 - **Error responses**: Shape `{ "error": "message" }` or `{ "message": "..." }` + optional data/token. Domain errors map to 404/403/409 where applicable.
 - **Registrations**: Unique constraint on `(event_id, user_id)`. Event delete cascades registrations (FK pragma on).
@@ -111,7 +111,7 @@ secrets/
 
 ## When Working in This Codebase
 
-- Always ensure Vault is running and the JWT secret is present before starting the server.
+- Locally: either set `JWT_SIGNING_KEY` or run Vault with the JWT secret. On Vercel: set `JWT_SIGNING_KEY` in Project → Settings → Environment Variables (do not run Vault on Vercel).
 - When adding protected routes, place them under the `authenticated` group.
 - When modifying events, replicate the ownership check pattern.
 - Do not commit `events.db` or real secrets (the current db file contains dev data).

@@ -37,7 +37,12 @@ func main() {
 
 	routes.RegisterRoutes(server)
 
-	const addr = ":8080"
+	// Vercel and other platforms inject PORT; default to 8080 for local dev.
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
 	slog.Info("starting HTTP server", "addr", addr)
 	if err := server.Run(addr); err != nil {
 		slog.Error("HTTP server failed", "err", err)
