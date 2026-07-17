@@ -110,8 +110,24 @@ utils/
 ## Missing / Future
 
 - No OpenAPI-driven contract tests / Swagger runtime
-- No CI workflow yet
 - No input validation beyond Gin's binding tags
+
+## CI / Deploy (GitHub Actions → Vercel)
+
+Workflow: `.github/workflows/go.yml`
+
+- **build** + **test** on push/PR to `main` / `master`
+- **deploy** (production) only on **manual** run: Actions → Go → **Run workflow** (still runs build+test first)
+
+Required GitHub repository secrets:
+
+| Secret | Source |
+|--------|--------|
+| `VERCEL_TOKEN` | Vercel → Account Settings → Tokens |
+| `VERCEL_ORG_ID` | `.vercel/project.json` → `orgId` (after `vercel link`) |
+| `VERCEL_PROJECT_ID` | `.vercel/project.json` → `projectId` |
+
+Also set `JWT_SIGNING_KEY` in the Vercel project Environment Variables (Production).
 
 ## Verification
 

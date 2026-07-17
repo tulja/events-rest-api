@@ -1,4 +1,4 @@
-# Build and test the Go API (requires Go >= 1.26 for gin/vault/slog deps)
+# Build, test, and (manually) deploy the Go API to Vercel (requires Go >= 1.26)
 name: Go
 
 on:
@@ -6,6 +6,13 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  # Manual production deploy: Actions → Go → Run workflow
+  workflow_dispatch:
+
+# Avoid overlapping production deploys when multiple manual runs are triggered.
+concurrency:
+  group: vercel-deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -45,3 +52,50 @@ jobs:
           CGO_ENABLED: "0"
         run: go test ./... -count=1
         # modernc.org/sqlite is pure Go (no CGO)
+
+  # Production deploy only when this workflow is started manually (workflow_dispatch).
+  # Still runs build+test first via needs.
+  # Required GitHub secrets:
+  #   VERCEL_TOKEN       — Vercel account token (Settings → Tokens)
+  #   VERCEL_ORG_ID      — team/user id (from `vercel link` / .vercel/project.json orgId)
+  #   VERCEL_PROJECT_ID  — project id (from `vercel link` / .vercel/project.json projectId)
+  # Ensure JWT_SIGNING_KEY is set in the Vercel project Environment Variables.
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    if: github.event_name == 'workflow_dispatch'
+    environment: production
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@41
+
+      - name: Pull Vercel environment (production)
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build project artifacts
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy to Vercel (production)
+        id: deploy
+        run: |
+          set -euo pipefail
+          url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to: $url"
+
+      - name: Deployment summary
+        run: |
+          {
+            echo "## Vercel production deploy"
+            echo ""
+            echo "- **URL:** ${{ steps.deploy.outputs.url }}"
+            echo "- **Commit:** \`${{ github.sha }}\`"
+            echo "- **Branch:** \`${{ github.ref_name }}\`"
+            echo "- **Trigger:** manual (workflow_dispatch)"
+          } >> "$GITHUB_STEP_SUMMARY"
