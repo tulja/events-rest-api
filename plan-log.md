@@ -18,8 +18,7 @@ There is **no structured logging**. What exists today:
 | `routes/users.go` | `fmt.Println("Creating user ....")` / `"Logging in user ...."` |
 | `db/events.go` | `fmt.Print(event)` after insert |
 | `db/db.go` | `panic(err)` on open/schema failure (no prior log) |
-| `secrets/client.go` | Errors returned only; panics via `MustGetSecretValue` |
-| `utils/jwt.go` | Errors returned only (Vault load, verify, sign) |
+| `utils/jwt.go` | Errors returned only (env key load, verify, sign) |
 | `middlewares/authentication.go` | Silent 401 responses |
 
 **Problems with current `fmt` prints:**
@@ -40,15 +39,14 @@ There is **no structured logging**. What exists today:
 | **DEBUG** | High-volume diagnostics: handler entered, list counts, auth success with userId. Off by default in production. |
 | **INFO** | Normal lifecycle and successful mutations: server start, DB ready, signup/login OK, event CRUD OK, registration OK/cancel. |
 | **WARN** | Expected client/security issues: bad JSON, invalid id, missing/invalid JWT, bad credentials, ownership denial, not found, already registered. |
-| **ERROR** | Unexpected server failures: SQL errors, bcrypt failure, Vault/JWT infra failures, HTTP server crash. |
+| **ERROR** | Unexpected server failures: SQL errors, bcrypt failure, JWT key/infra failures, HTTP server crash. |
 | **FATAL** | Unrecoverable startup (DB open, schema create). Log ERROR then `panic` / `os.Exit(1)`. |
 
 ### What never to log
 
 - Passwords or password hashes  
 - Full `Authorization` header or JWT string  
-- Vault token  
-- Secret values from Vault  
+- JWT signing key value  
 - Prefer IDs + outcome over dumping full request/response bodies  
 
 ---
@@ -94,31 +92,19 @@ Notes:
 
 ---
 
-### 4. `secrets/client.go`
+### 4. `utils/jwt.go`
 
 | Point | Level | Suggested message / fields |
 |---|---|---|
-| `NewClient` success | INFO | `vault client created`, `address` only (**never** token) |
-| Missing token / client create fail | ERROR | Message in returned error; log at JWT load site |
-| Secret/key missing | ERROR | path + key name only (no secret value) |
-
-Primary logging site for Vault failures is `utils/jwt.go` `loadJWTSigningKey` (first use / cache).
-
----
-
-### 5. `utils/jwt.go`
-
-| Point | Level | Suggested message / fields |
-|---|---|---|
-| First successful key load | INFO | `JWT signing key loaded from Vault`, path `events-api/jwt` |
-| Vault client / secret fail | ERROR | `failed to load JWT signing key`, `err` |
+| First successful key load | INFO | `JWT signing key loaded from environment`, `source` |
+| Missing env key | ERROR | `failed to load JWT signing key`, `err` |
 | `GenerateToken` sign fail | ERROR | `failed to sign JWT`, `userId` |
 | `VerifyToken` invalid/expired | DEBUG (or none) | Common client issue — middleware should WARN |
 | Unexpected signing method | WARN | `unexpected JWT signing method`, `alg` |
 
 ---
 
-### 6. `utils/hash.go`
+### 5. `utils/hash.go`
 
 | Point | Level | Suggested message / fields |
 |---|---|---|
@@ -127,7 +113,7 @@ Primary logging site for Vault failures is `utils/jwt.go` `loadJWTSigningKey` (f
 
 ---
 
-### 7. `middlewares/authentication.go`
+### 6. `middlewares/authentication.go`
 
 | Point | Level | Suggested message / fields |
 |---|---|---|
@@ -137,7 +123,7 @@ Primary logging site for Vault failures is `utils/jwt.go` `loadJWTSigningKey` (f
 
 ---
 
-### 8. `routes/users.go`
+### 7. `routes/users.go`
 
 | Handler | Point | Level | Safe fields |
 |---|---|---|---|
@@ -153,7 +139,7 @@ Primary logging site for Vault failures is `utils/jwt.go` `loadJWTSigningKey` (f
 
 ---
 
-### 9. `routes/events.go`
+### 8. `routes/events.go`
 
 | Handler | Point | Level | Safe fields |
 |---|---|---|---|
@@ -175,7 +161,7 @@ Primary logging site for Vault failures is `utils/jwt.go` `loadJWTSigningKey` (f
 
 ---
 
-### 10. `routes/register.go`
+### 9. `routes/register.go`
 
 | Handler | Point | Level | Safe fields |
 |---|---|---|---|
@@ -190,13 +176,13 @@ Primary logging site for Vault failures is `utils/jwt.go` `loadJWTSigningKey` (f
 
 ---
 
-### 11. `routes/routes.go`
+### 10. `routes/routes.go`
 
 No logging needed (route registration only). Optional DEBUG at boot: “routes registered” — low value.
 
 ---
 
-### 12. Models (`models/*`)
+### 11. Models (`models/*`)
 
 No logging — pure data structs.
 
@@ -207,7 +193,7 @@ No logging — pure data structs.
 | Layer | DEBUG | INFO | WARN | ERROR |
 |---|---|---|---|---|
 | Startup (`main`, `db.InitDB`) | — | server/DB ready | — | open/schema/listen fail |
-| Vault / JWT key | — | client + key loaded | bad alg | Vault/secret/sign fail |
+| JWT key | — | env key loaded | bad alg | missing env / sign fail |
 | Auth middleware | auth OK | — | missing/invalid token | — |
 | Users routes | — | signup/login OK | bind, bad creds | insert, JWT gen |
 | Events routes | list count | create/update/delete OK | bind, bad id, not found, not owner | SQL failures |
@@ -254,7 +240,6 @@ slog.Error("failed to insert event", "userId", userId, "err", err)
 | `main.go` | slog setup + lifecycle logs |
 | `db/db.go` | startup INFO/ERROR |
 | `db/events.go` | remove `fmt.Print` |
-| `secrets/client.go` | optional connect INFO |
 | `utils/jwt.go` | key load INFO/ERROR |
 | `utils/hash.go` | bcrypt ERROR |
 | `middlewares/authentication.go` | WARN/DEBUG |
@@ -273,9 +258,9 @@ slog.Error("failed to insert event", "userId", userId, "err", err)
 5. Missing auth header → WARN.  
 6. Create/update/delete event → INFO with ids.  
 7. Ownership denial / not found → WARN.  
-8. Forced SQL/Vault failure → ERROR.  
+8. Forced SQL/JWT-key failure → ERROR.  
 9. `LOG_LEVEL=debug` shows DEBUG; default `info` does not.  
-10. Grep logs: no tokens, passwords, or Vault secrets.
+10. Grep logs: no tokens, passwords, or JWT signing keys.
 
 ---
 
@@ -294,7 +279,7 @@ slog.Error("failed to insert event", "userId", userId, "err", err)
 | Priority | Action |
 |---|---|
 | P0 | Remove `fmt.Print*` debug dumps |
-| P0 | ERROR on infra failures (DB, Vault, JWT sign, unexpected SQL) |
+| P0 | ERROR on infra failures (DB, JWT key/sign, unexpected SQL) |
 | P1 | WARN on auth failures and client validation errors |
 | P1 | INFO on startup + successful domain mutations |
 | P2 | DEBUG for auth OK and list counts |

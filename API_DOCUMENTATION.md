@@ -22,7 +22,7 @@ All protected routes require a valid JWT.
 - **Header:** `Authorization: Bearer <jwt>` **or** raw token `Authorization: <jwt>`
 - **Note:** An optional `Bearer ` prefix is stripped case-insensitively before verification.
 - **Obtaining credentials:** Use `POST /login` after signing up.
-- **Startup:** JWT signing key is loaded from Vault at process start (fail-fast).
+- **Startup:** JWT signing key is loaded from `JWT_SIGNING_KEY` (or `JWT_SECRET`) at process start (fail-fast).
 
 **Example:**
 ```bash
@@ -416,7 +416,7 @@ No rate limiting middleware is present.
 - **Ownership enforcement:** `PUT` and `DELETE` on `/events/:id` verify that `event.user_id` matches the `userId` from the JWT. The check happens in the DB layer (403 if not owner).
 - **Registrations:** Unique constraint on (`event_id`, `user_id`). SQLite foreign keys are enabled; deleting an event cascades registrations.
 - **Password handling:** Passwords are bcrypt-hashed on signup. The `password` field is never returned in responses.
-- **JWT secret:** Loaded from HashiCorp Vault (KV v2) at `secret/events-api/jwt` key `signing-key` at startup. Process exits if Vault/secret is unavailable.
+- **JWT secret:** Loaded from the `JWT_SIGNING_KEY` environment variable (legacy alias: `JWT_SECRET`) at startup. Process exits if neither is set.
 - **Date handling:** `date_time` uses Go's `time.Time` (serialized as RFC3339).
 - **Error handling:** Domain errors map to 404 (not found), 403 (forbidden), 409 (conflict); unexpected failures remain 500.
 - **Health:** `GET /health` returns `{"status":"ok"}` when SQLite is reachable.

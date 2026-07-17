@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -96,9 +97,6 @@ func TestLoadJWTSigningKey_FromEnv(t *testing.T) {
 	ResetJWTSigningKeyForTest()
 	t.Cleanup(ResetJWTSigningKeyForTest)
 
-	// Ensure Vault is not required when env is set.
-	t.Setenv("VAULT_ADDR", "")
-	t.Setenv("VAULT_TOKEN", "")
 	t.Setenv("JWT_SECRET", "")
 	t.Setenv("JWT_SIGNING_KEY", "env-signing-key-value")
 
@@ -146,11 +144,12 @@ func TestEnsureJWTSigningKey_MissingConfig(t *testing.T) {
 
 	t.Setenv("JWT_SIGNING_KEY", "")
 	t.Setenv("JWT_SECRET", "")
-	t.Setenv("VAULT_ADDR", "http://127.0.0.1:1") // nothing listening
-	t.Setenv("VAULT_TOKEN", "not-used-if-unreachable")
 
 	err := EnsureJWTSigningKey()
 	if err == nil {
-		t.Fatal("expected error when env and Vault are unavailable")
+		t.Fatal("expected error when JWT_SIGNING_KEY / JWT_SECRET are unset")
+	}
+	if !strings.Contains(err.Error(), "JWT_SIGNING_KEY") {
+		t.Fatalf("error should mention JWT_SIGNING_KEY, got: %v", err)
 	}
 }

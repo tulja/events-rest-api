@@ -11,7 +11,7 @@ A lightweight REST API for creating and managing events with user authentication
 - **HTTP Framework**: Gin (`github.com/gin-gonic/gin`)
 - **Database**: SQLite (via pure-Go `modernc.org/sqlite`, no CGO). Path: `DATABASE_PATH` / `SQLITE_PATH`, else `/tmp/events.db` on Vercel, else `./events.db`
 - **Auth**: JWT (golang-jwt/jwt/v5) + bcrypt password hashing
-- **Secrets**: JWT signing key required at startup — `JWT_SIGNING_KEY` (or `JWT_SECRET`) env preferred for Vercel/PaaS; else HashiCorp Vault KV v2 (`secret/events-api/jwt` → `signing-key`)
+- **Secrets**: JWT signing key required at startup via env — `JWT_SIGNING_KEY` (or legacy `JWT_SECRET`)
 - **Port**: 8080
 
 Core domain:
@@ -21,19 +21,12 @@ Core domain:
 
 ## Development Setup & Commands
 
-### 1. Start Vault (required for JWT)
+### 1. Set the JWT signing key
 
 ```bash
-# Easiest: use the provided script
-./scripts/start-vault.sh
-
-# Or manually
-vault server -dev -dev-root-token-id="root"
-export VAULT_ADDR="http://127.0.0.1:8200"
-export VAULT_TOKEN="root"
-
-# Ensure the signing key exists
-vault kv put secret/events-api/jwt signing-key="AbcXyz123"
+export JWT_SIGNING_KEY="your-dev-signing-key"
+# optional legacy alias:
+# export JWT_SECRET="your-dev-signing-key"
 ```
 
 ### 2. Run the API
@@ -50,7 +43,7 @@ Server starts on `http://localhost:8080`.
 
 ```bash
 make build   # go build -o events-rest-api .
-make run     # go run .  (Vault required for JWT)
+make run     # go run .  (JWT_SIGNING_KEY required)
 make test    # go test ./... -count=1  (no CGO required; modernc.org/sqlite)
 make test-v  # verbose tests
 make fmt
@@ -58,7 +51,7 @@ make tidy
 make clean
 ```
 
-Unit tests cover `db`, `utils`, `middlewares`, `models`, `secrets`, and `routes`. See `plan-db-unit-tests.md`.
+Unit tests cover `db`, `utils`, `middlewares`, `models`, and `routes`. See `plan-unit-tests.md`.
 
 ## Architecture & File Layout
 
@@ -81,11 +74,8 @@ models/
 middlewares/
   authentication.go     # JWT middleware — sets "userId" in gin context
 utils/
-  jwt.go                # GenerateToken / VerifyToken (loads key from Vault)
+  jwt.go                # GenerateToken / VerifyToken (loads key from env)
   hash.go               # bcrypt helpers
-secrets/
-  client.go             # Vault KV v2 wrapper
-  README.md             # Dev setup docs
 ```
 
 ### Critical Implementation Details
@@ -93,7 +83,7 @@ secrets/
 - **Authentication**: `Authorization: Bearer <jwt>` or raw JWT both accepted (`Bearer ` prefix stripped case-insensitively).
 - **Authorization**: `updateEvent` and `deleteEvent` fetch the event and compare `eventFromDb.UserID != userIdFromToken`.
 - **Ownership**: Every created event stores the creator's `userId` from the JWT.
-- **JWT**: Signing key loaded at startup via `utils.EnsureJWTSigningKey()` (fail-fast): env `JWT_SIGNING_KEY` / `JWT_SECRET` first, then Vault. Successful loads are cached; failures are not sticky so retries can succeed.
+- **JWT**: Signing key loaded at startup via `utils.EnsureJWTSigningKey()` (fail-fast) from env `JWT_SIGNING_KEY` or `JWT_SECRET`. Successful loads are cached; failures are not sticky so retries can succeed after the env is set.
 - **Database**: Raw SQL only. Positional `?` parameters. `PRAGMA foreign_keys = ON`. Rows closed with `defer`.
 - **Error responses**: Shape `{ "error": "message" }` or `{ "message": "..." }` + optional data/token. Domain errors map to 404/403/409 where applicable.
 - **Registrations**: Unique constraint on `(event_id, user_id)`. Event delete cascades registrations (FK pragma on).
@@ -111,7 +101,7 @@ secrets/
 
 ## When Working in This Codebase
 
-- Locally: either set `JWT_SIGNING_KEY` or run Vault with the JWT secret. On Vercel: set `JWT_SIGNING_KEY` in Project → Settings → Environment Variables (do not run Vault on Vercel).
+- Always set `JWT_SIGNING_KEY` (or `JWT_SECRET`) before starting the API. On Vercel: set `JWT_SIGNING_KEY` in Project → Settings → Environment Variables.
 - When adding protected routes, place them under the `authenticated` group.
 - When modifying events, replicate the ownership check pattern.
 - Do not commit `events.db` or real secrets (the current db file contains dev data).
@@ -122,11 +112,9 @@ secrets/
 - No OpenAPI-driven contract tests / Swagger runtime
 - No CI workflow yet
 - No input validation beyond Gin's binding tags
-- Hardcoded dev Vault token and address patterns
 
 ## Verification
 
 After changes:
 - `go build .` must succeed with no errors
 - Manually test critical flows: signup → login → create event → register → update (as owner)
-- Re-apply Vault secret after any Vault restart

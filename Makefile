@@ -9,7 +9,7 @@ help: ## Show available targets
 build: ## Build binary to ./events-rest-api
 	$(GO) build -o $(BINARY) .
 
-run: ## Run the API (Vault must be up for JWT)
+run: ## Run the API (JWT_SIGNING_KEY must be set)
 	$(GO) run .
 
 test: ## Run all tests once

@@ -10,7 +10,6 @@
 | `utils` | **Implemented** | `go test ./utils/ -count=1 -v` |
 | `middlewares` | **Implemented** | `go test ./middlewares/ -count=1 -v` |
 | `models` | **Implemented** | `go test ./models/ -count=1 -v` |
-| `secrets` | **Implemented** | `go test ./secrets/ -count=1 -v` |
 | `routes` | **Implemented** | `go test ./routes/ -count=1 -v` |
 
 ```bash
@@ -27,7 +26,6 @@ Requires **CGO** for `go-sqlite3` (db + routes).
 |---|---|
 | Prefer stdlib + gin test utils | `testing`, `net/http/httptest`, `gin` test mode |
 | Prefer real logic over mocks | Real bcrypt; real JWT crypto; real in-memory SQLite |
-| Vault | Mock with `httptest.Server` (KV v2 JSON), not a real Vault process |
 | Production hooks | JWT inject/reset; `db.InitInMemory()` for cross-package tests |
 | Never use `./events.db` | `:memory:` only |
 | Parallelism | Avoid on packages with package-global state (`db`, JWT key) |
@@ -38,7 +36,7 @@ Requires **CGO** for `go-sqlite3` (db + routes).
 
 ### `utils` JWT
 
-- `SetJWTSigningKeyForTest(key []byte)` — inject key without Vault
+- `SetJWTSigningKeyForTest(key []byte)` — inject key without env
 - `ResetJWTSigningKeyForTest()` — clear cached key between tests
 - Loader uses mutex + loaded flag (not sticky failed `sync.Once`)
 
@@ -130,7 +128,7 @@ White-box tests (`package db`) against in-memory SQLite. No sqlmock.
 | Valid token | 200 + `userId` in context/response |
 | Wrong signing key | 401 |
 
-Uses JWT test key hook; no Vault.
+Uses JWT test key hook; no external secret store.
 
 ---
 
@@ -148,26 +146,6 @@ Uses JWT test key hook; no Vault.
 
 - JSON marshal/unmarshal for `User`, `Event`, `Registration`
 - Gin `ShouldBindJSON` required-field validation for User/Event
-
----
-
-## `secrets/` (implemented)
-
-### Files
-
-| File | Purpose |
-|---|---|
-| `secrets/client_test.go` | `NewClient` + Get* against mock Vault |
-
-### Cases
-
-| Area | Tests |
-|---|---|
-| `NewClient` | missing token; config token/address; env token |
-| `GetSecret` / `GetSecretValue` | success, 404, missing key, non-string |
-| `MustGetSecretValue` | success; panics on error |
-
-Mock: `httptest.Server` returning Vault KV v2 JSON at `/v1/secret/data/...`.
 
 ---
 
@@ -208,16 +186,15 @@ Same-package (`package routes`) integration-style tests:
 3. JWT hooks + `utils/jwt_test.go`  
 4. `middlewares/authentication_test.go`  
 5. `models/*_test.go`  
-6. `secrets/client_test.go`  
-7. `db.InitInMemory` + `routes/*_test.go`  
-8. `go test ./...`
+6. `db.InitInMemory` + `routes/*_test.go`  
+7. `go test ./...`
 
 ---
 
 ## Verification
 
 ```bash
-go test ./db/ ./utils/ ./middlewares/ ./models/ ./secrets/ ./routes/ -count=1 -v
+go test ./db/ ./utils/ ./middlewares/ ./models/ ./routes/ -count=1 -v
 go test ./... -count=1
 go build .
 ```
@@ -225,7 +202,7 @@ go build .
 **Success criteria**
 
 - All packages pass  
-- No real Vault required for unit tests  
+- No external secret store required for unit tests  
 - No writes to `./events.db`  
 - Existing `db` tests still pass  
 
@@ -234,7 +211,6 @@ go build .
 ## Out of scope
 
 - E2E against server on `:8080`  
-- Real HashiCorp Vault in CI  
 - Fixing HTTP 500 → 403/404 domain mapping  
 - OpenAPI/contract tests  
 - Frontend tests  
@@ -249,5 +225,4 @@ go build .
 | `utils` | Unit | JWT inject/reset |
 | `middlewares` | Gin HTTP | none |
 | `models` | JSON/bind | none |
-| `secrets` | httptest Vault mock | none |
 | `routes` | Integration unit | `db.InitInMemory` |
