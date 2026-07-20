@@ -69,6 +69,8 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -89,10 +91,17 @@ jobs:
         run: |
           set -euo pipefail
           url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          # Normalize: strip whitespace; vercel may print a bare host
+          url=$(echo "$url" | tr -d '[:space:]')
+          case "$url" in
+            http://*|https://*) ;;
+            *) url="https://${url}" ;;
+          esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed to: $url"
 
       - name: Deployment summary
+        if: always() && steps.deploy.outcome == 'success'
         run: |
           {
             echo "## Vercel production deploy"
@@ -101,4 +110,107 @@ jobs:
             echo "- **Commit:** \`${{ github.sha }}\`"
             echo "- **Branch:** \`${{ github.ref_name }}\`"
             echo "- **Trigger:** manual (workflow_dispatch)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Post-deploy E2E: separate job so deploy success is independent of test results.
+  e2e:
+    name: API E2E (production)
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install API automation dependencies
+        run: pip install -r scripts/requirements-api-tests.txt
+
+      # Smoke/E2E against the live production URL from the deploy job.
+      # Higher timeout for serverless cold starts after deploy.
+      - name: Wait for health and run API automation tests
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.url }}
+          API_TEST_TIMEOUT: "30"
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE_URL}" ]; then
+            echo "ERROR: deploy job did not output a URL"
+            exit 1
+          fi
+          echo "Waiting for deployment health at ${BASE_URL} ..."
+          for i in $(seq 1 12); do
+            if curl -fsS --max-time 10 "${BASE_URL}/health" >/dev/null 2>&1; then
+              echo "Health OK (attempt ${i})"
+              break
+            fi
+            if [ "$i" -eq 12 ]; then
+              echo "ERROR: ${BASE_URL}/health did not become ready"
+              exit 1
+            fi
+            echo "Not ready yet (attempt ${i}/12); sleeping 5s..."
+            sleep 5
+          done
+          python scripts/test_api_automation.py
+
+      - name: E2E summary
+        if: always()
+        run: |
+          {
+            echo "## Post-deploy API E2E"
+            echo ""
+            echo "- **URL:** ${{ needs.deploy.outputs.url }}"
+            echo "- **Result:** ${{ job.status }}"
+            echo "- **Commit:** \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Manual rollback after a failed E2E run.
+  # Gated by GitHub Environment "production-rollback":
+  #   Settings → Environments → production-rollback → Required reviewers
+  # Approving that environment deployment runs `vercel rollback` (instant rollback
+  # to the previous production deployment). Reject/cancel to leave the new deploy.
+  rollback:
+    name: Rollback production (manual approval)
+    runs-on: ubuntu-latest
+    needs: [deploy, e2e]
+    if: >-
+      always() &&
+      github.event_name == 'workflow_dispatch' &&
+      needs.deploy.result == 'success' &&
+      needs.e2e.result == 'failure'
+    environment: production-rollback
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@56
+
+      - name: Pull Vercel environment (production)
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Instant rollback to previous production deployment
+        run: |
+          set -euo pipefail
+          echo "Rolling back production (failed E2E against ${{ needs.deploy.outputs.url }}) ..."
+          vercel rollback --yes --token="$VERCEL_TOKEN"
+          echo "Rollback requested."
+
+      - name: Rollback summary
+        if: always()
+        run: |
+          {
+            echo "## Production rollback"
+            echo ""
+            echo "- **Failed deployment URL:** ${{ needs.deploy.outputs.url }}"
+            echo "- **Action:** \`vercel rollback --yes\` (previous production)"
+            echo "- **Result:** ${{ job.status }}"
+            echo "- **Commit that was rolled back:** \`${{ github.sha }}\`"
+            echo "- **Gate:** environment \`production-rollback\` (manual approval)"
           } >> "$GITHUB_STEP_SUMMARY"

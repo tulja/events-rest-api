@@ -118,6 +118,8 @@ Workflow: `.github/workflows/go.yml`
 
 - **build** + **test** on push/PR to `main` / `master`
 - **deploy** (production) only on **manual** run: Actions → Go → **Run workflow** (still runs build+test first)
+- **e2e** job (needs `deploy`): waits for `GET /health`, then runs `scripts/test_api_automation.py` with `BASE_URL` = deploy URL
+- **rollback** job (needs `deploy` + `e2e`): offered only when E2E **fails**; requires manual approval via GitHub Environment `production-rollback`, then runs `vercel rollback --yes`
 - Framework: `vercel.json` sets `"framework": "go"` (requires Vercel CLI ≥ 51; workflow pins `vercel@56`)
 - In the Vercel project dashboard, Framework Preset should be **Go** (or left to auto-detect from `go.mod` + `main.go`)
 
@@ -130,6 +132,13 @@ Required GitHub repository secrets:
 | `VERCEL_PROJECT_ID` | `.vercel/project.json` → `projectId` |
 
 Also set `JWT_SIGNING_KEY` in the Vercel project Environment Variables (Production).
+
+GitHub Environments (repo **Settings → Environments**):
+
+| Environment | Purpose |
+|-------------|---------|
+| `production` | Deploy job (optional protection rules) |
+| `production-rollback` | Manual approval gate before `vercel rollback` — add **Required reviewers** so rollback is not automatic |
 
 ## Verification
 
