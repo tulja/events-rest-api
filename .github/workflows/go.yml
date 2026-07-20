@@ -72,8 +72,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # CLI >= 51 required for Go framework preset (go.mod + main.go).
+      # Older CLI (e.g. 41) falls back to @vercel/static-build and fails with:
+      #   Build "src" is "package.json" but expected "package.json"
       - name: Install Vercel CLI
-        run: npm install -g vercel@41
+        run: npm install -g vercel@56
 
       - name: Pull Vercel environment (production)
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"

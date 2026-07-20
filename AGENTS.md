@@ -118,6 +118,8 @@ Workflow: `.github/workflows/go.yml`
 
 - **build** + **test** on push/PR to `main` / `master`
 - **deploy** (production) only on **manual** run: Actions → Go → **Run workflow** (still runs build+test first)
+- Framework: `vercel.json` sets `"framework": "go"` (requires Vercel CLI ≥ 51; workflow pins `vercel@56`)
+- In the Vercel project dashboard, Framework Preset should be **Go** (or left to auto-detect from `go.mod` + `main.go`)
 
 Required GitHub repository secrets:
 
